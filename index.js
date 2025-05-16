@@ -1,0 +1,55 @@
+import express from 'express'
+import dotenv from "dotenv";
+import mongoose from 'mongoose';
+import bodyParser from 'body-parser';
+import cors from "cors";
+import cookieParser from 'cookie-parser';
+
+import UsersRouter from './src/Routers/user.js'
+import AuthRouter from './src/Routers/auth.js'
+import AbsenRouter from './src/Routers/absen.js'
+import ProduksiRouter from './src/Routers/produksi.js'
+import SalesRouter from './src/Routers/sales.js'
+import path from 'path';
+
+dotenv.config();
+const app = express()
+const port = 4454
+const whitelist = ["http://localhost:3000", "http://localhost:5173"];
+
+app.use(cookieParser())
+app.use(bodyParser.urlencoded({ extended: true }))
+app.use(bodyParser.json())
+app.use(
+  cors({
+    origin: whitelist,
+    // methods: ["GET", "POST", "PUT"],
+    credentials: true,
+    exposedHeaders: ['set-cookie']
+  })
+);
+
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+app.use("/user", UsersRouter)
+app.use("/auth", AuthRouter)
+app.use("/absen", AbsenRouter)
+app.use("/produksi", ProduksiRouter)
+app.use("/sale", SalesRouter)
+
+app.use((error, req, res, next) => {
+  const status = error.errorStatus || 500;
+  const message = error.message;
+  const data = error.data;
+  res.status(400).json({
+    message: message,
+    data: data,
+  });
+});
+
+mongoose
+  .connect(process.env.DB)
+  .then(() => {
+    app.listen(port, () => console.log("Server listening on port: ", port));
+  })
+  .catch((err) => console.log(err));

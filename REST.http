@@ -1,0 +1,90 @@
+GET http://localhost:4454/user/getUser HTTP/1.1
+
+###
+
+POST http://localhost:4454/user/createUser HTTP/1.1
+content-type: application/json
+
+{
+    "username": "admin",
+    "password": "12345",
+    "nama": "Teddy",
+    "noTelp": "08132255446",
+    "role": "admin"
+}
+
+###
+POST http://localhost:4454/auth/login HTTP/1.1
+content-type: application/json
+
+{
+    "username": "teddy",
+    "password": "Suprise03"
+}
+
+###
+POST http://localhost:4454/produksi/buat
+Content-Type: application/json
+
+{
+  "name": "Kopi",
+  "unit": "gram",
+  "stock": 800,
+  "price": 70000
+}
+
+###
+PUT http://localhost:4454/produksi/682498456d79f3bdf748c817/tambahStock
+Content-Type: application/json
+
+{
+  "additionalStock": 2000,
+  "note": "Restock Mei 2025"
+}
+
+###
+GET http://localhost:4454/sale/history/
+
+###
+POST http://localhost:4454/produksi/produk/buat
+Content-Type: application/json
+
+{
+  "name": "Cappuccino",
+  "sellingPrice": 25000,
+  "recipe": [
+    { "material": "68249ea8c66c90dac777b222", "amountPerUnit": 50 },
+    { "material": "6824a054c66c90dac777b228",  "amountPerUnit": 16 },
+    { "material": "6824a40ec66c90dac777b483",  "amountPerUnit": 120 }
+  ]
+}
+
+###
+POST http://localhost:4454/produksi/buatProduksi
+Content-Type: application/json
+
+{
+  "productId": "6824add171e017058486230b",
+  "quantity": 20
+}
+
+###
+POST http://localhost:4454/sale/ambil
+Content-Type: application/json
+{
+    "pickups": [
+        {
+            "productId": "6824add171e017058486230b",
+            "quantity": 2
+        },
+        {
+            "productId": "68255ac1e5aaf47fa07e1357",
+            "quantity": 2
+        },
+        {
+            "productId": "68255070e5aaf47fa07e122c",
+            "quantity": 2
+        }
+    ],
+    "note": "Tesing"
+}
