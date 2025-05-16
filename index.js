@@ -15,7 +15,7 @@ import path from 'path';
 dotenv.config();
 const app = express()
 const port = 4454
-const whitelist = ["http://localhost:3000", "http://localhost:5173"];
+const whitelist = ["http://localhost:4173", "http://localhost:5173", "https://kopi-ok.vercel.app/"];
 
 app.use(cookieParser())
 app.use(bodyParser.urlencoded({ extended: true }))
