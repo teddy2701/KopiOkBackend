@@ -35,13 +35,7 @@ app.use(
     exposedHeaders: ["set-cookie"]
   })
 );
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'https://kopi-ok.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
-});
+
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use("/user", UsersRouter)
