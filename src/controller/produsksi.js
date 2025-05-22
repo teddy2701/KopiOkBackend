@@ -186,6 +186,7 @@ export const createProduction = async (req, res, next) => {
       const usedMaterials = [];
        // Conversion factors: base unit to smallest (for kg, liter)
     const unitFactor = { kg: 1000, gram: 1, liter: 1000, pcs: 1 };
+
     for (const item of product.recipe) {
       const mat = item.material;
       // Calculate total usage in material's stock unit
@@ -204,9 +205,7 @@ export const createProduction = async (req, res, next) => {
       usedMaterials.push({ material: mat._id, totalUsed });
     }
   
-      // Update product stock
-      product.stock += quantity;
-      await product.save({ session });
+     
   
       // Record production
       
@@ -247,14 +246,48 @@ export const getProductions = async (req, res, next) => {
  * @desc   Get only products with stock > 0 for sales
  * @route  GET /api/products/available
  */
-export const getAvailableProducts = async (req, res, next) => {
+// export const getAvailableProducts = async (req, res, next) => {
+//   try {
+//     const products = await modelProduk.find({ stock: { $gt: 0 } })
+//       .select('name stock sellingPrice')
+//       .sort({ name: 1 });
+//     res.json(products);
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+
+export const getProductsForCashier = async (req, res, next) => {
   try {
-    const products = await modelProduk.find({ stock: { $gt: 0 } })
-      .select('name stock sellingPrice')
+    const products = await modelProduk.find()
+      .select('_id name sellingPrice') // Hanya ambil field yang diperlukan
       .sort({ name: 1 });
+     
     res.json(products);
   } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Terjadi kesalahan server" });
     next(error);
   }
 };
+export const getPengambilanData = async (req, res, next) => {
+  try {
+    // Ambil semua bahan baku yang tersedia
+    const materials = await modelBahanBaku.find().select('_id name stock unit').sort({ name: 1 });
 
+    // Ambil semua produk beserta resepnya
+    const products = await modelProduk.find()
+      .select('_id name stock sellingPrice recipe')
+      .populate('recipe.material', 'name unit')
+      .sort({ name: 1 });
+
+    res.json({
+      materials,
+      products
+    });
+  } catch (error) {
+    console.error("Error saat ambil data pengambilan:", error);
+    res.status(500).json({ message: "Gagal mengambil data pengambilan." });
+    next(error);
+  }
+};

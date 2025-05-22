@@ -26,7 +26,7 @@ export const login = async (req, res) => {
         expiresIn: "1D",
       });
 
-      res.cookie("resfreshToken", refreshToken, {
+      res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         // secure: true,
         maxAge: 24 * 60 * 60 * 1000,
@@ -51,8 +51,7 @@ export const login = async (req, res) => {
 
 export const me = async (req, res, next) => {
     try {
-      const userCherker = req.cookies.resfreshToken;
-     
+      const userCherker = req.cookies.refreshToken;
       if (!userCherker)
         return res.status(401).json({ message: "Mohon login ke akun anda" });
   
@@ -87,7 +86,8 @@ export const me = async (req, res, next) => {
 
   export const logout = async (req, res, next) => {
     try{
-      const refreshToken = req.cookies.resfreshToken;
+      const refreshToken = req.cookies.refreshToken;
+
     // Jika tidak ada token di cookies
     if (!refreshToken) {
       return res.sendStatus(204); // No Content
@@ -98,7 +98,7 @@ export const me = async (req, res, next) => {
     
     // Jika user tidak ditemukan, tetap clear cookie
     if (!user) {
-      res.clearCookie('resfreshToken', {
+      res.clearCookie('refreshToken', {
         httpOnly: true,
         secure: true,
         sameSite: 'None'
@@ -112,7 +112,7 @@ export const me = async (req, res, next) => {
     });
 
     // Clear cookie
-    res.clearCookie('resfreshToken', {
+    res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: true,
       sameSite: 'None',

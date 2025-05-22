@@ -1,4 +1,4 @@
-GET http://localhost:4454/user/getUser HTTP/1.1
+GET http://localhost:4454/sale/get/final/6826bcdd7b4a1814bcde807f HTTP/1.1
 
 ###
 
@@ -6,11 +6,11 @@ POST http://localhost:4454/user/createUser HTTP/1.1
 content-type: application/json
 
 {
-    "username": "admin",
+    "username": "www",
     "password": "12345",
     "nama": "Teddy",
     "noTelp": "08132255446",
-    "role": "admin"
+    "role": "produksi"
 }
 
 ###
@@ -43,7 +43,7 @@ Content-Type: application/json
 }
 
 ###
-GET http://localhost:4454/sale/history/
+GET http://localhost:4454/sale/get/laporan/682e9795c5d10e687f12e875
 
 ###
 POST http://localhost:4454/produksi/produk/buat

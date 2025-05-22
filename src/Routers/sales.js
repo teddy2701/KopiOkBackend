@@ -1,11 +1,21 @@
 import express from "express"
-import { getSales, processReturns, processPickup, getSalesHistory, getSalesHistoryById} from "../controller/sales.js"
+import { getSales, getPengambilanID, getLaporanHarian, createReturn, createPengambilan, getFinalSale ,createPenjualanTemp, getSalesHistory, getSalesHistoryById, savePenjualanTemp,  getPenjualanTemp, finalizePenjualan} from "../controller/sales.js"
 const router = express.Router() 
 
-router.post("/kembali", processReturns)
-router.post("/ambil", processPickup)
+router.post("/kembali", createReturn)
+router.post("/ambil", createPengambilan)
+router.post("/simpan/temp", createPenjualanTemp )
+router.post("/simpan/final/", finalizePenjualan)
+router.get("/get/pengambilan/:id", getPengambilanID)
+router.get("/get/laporan/:id", getLaporanHarian)
+
+
 router.get("/history/", getSalesHistory)
 router.get("/history/:id", getSalesHistoryById)
 router.get("/", getSales)
+router.get("/temp/:id", getPenjualanTemp)
+router.put("/temp/edit/:id", savePenjualanTemp)
+
+router.get("/get/final/:id", getFinalSale)
 
 export default router

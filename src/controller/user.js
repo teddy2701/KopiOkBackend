@@ -15,7 +15,7 @@ export const createUser = async (req, res) => {
       return res.status(409).json({ message: "Username already exists" });
     }
 
-    // 2. Pastikan kedua file hadir
+    // // 2. Pastikan kedua file hadir
     if (
       !req.files ||
       !Array.isArray(req.files.fotoWajah) ||

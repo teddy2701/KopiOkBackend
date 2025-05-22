@@ -13,7 +13,6 @@ const productSchema = new Schema({
       amountPerUnit: { type: Number, required: true }, // dalam unit sesuai Material.unit :contentReference[oaicite:6]{index=6}
     },
   ],
-  stock: { type: Number, default: 0 },
   sellingPrice: { type: Number, required: true }, // harga jual per cup/pcs
 }, { timestamps: true });
 

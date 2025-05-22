@@ -1,5 +1,5 @@
 import express from "express";
-import { createBahanBaku, getAvailableProducts ,addMaterialStock, getMaterials, getProducts,createProduct, createProduction, getProductions } from "../controller/produsksi.js";
+import { createBahanBaku ,addMaterialStock, getPengambilanData, getMaterials, getProducts,createProduct, createProduction, getProductions, getProductsForCashier } from "../controller/produsksi.js";
 
 const router = express.Router()
 
@@ -10,7 +10,10 @@ router.post("/buatProduksi", createProduction);
 router.get("/", getMaterials);
 router.get("/produk", getProducts);
 router.get("/getData", getProductions);
-router.get("/produk/tersedia", getAvailableProducts);
+router.get("/forCashier", getProductsForCashier);
+router.get("/pengambilan", getPengambilanData);
+
+// router.get("/produk/tersedia", getAvailableProducts);
 router.put("/:id/tambahStock", addMaterialStock);
 
 export default router
