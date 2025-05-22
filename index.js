@@ -35,7 +35,6 @@ app.use(
     exposedHeaders: ["set-cookie"]
   })
 );
-
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use("/user", UsersRouter)

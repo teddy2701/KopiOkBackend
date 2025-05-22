@@ -28,11 +28,11 @@ export const login = async (req, res) => {
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        // secure: true,
+        secure: true,
         maxAge: 24 * 60 * 60 * 1000,
+        sameSite: "None"
       });
-      res.header('Access-Control-Allow-Origin', 'https://kopi-ok.vercel.app');
-      res.header('Access-Control-Allow-Credentials', true);
+     
 
       await modelUser.findByIdAndUpdate(user._id, {
         refreshToken,
@@ -76,14 +76,13 @@ export const me = async (req, res, next) => {
           };
   
           const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: "20s",
+            expiresIn: "15m",
           });
           
           res.json({ accessToken  });
         }
       );
-      res.header('Access-Control-Allow-Origin', 'https://kopi-ok.vercel.app');
-res.header('Access-Control-Allow-Credentials', true);
+   
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Terjadi sesuatu pada server" });
@@ -125,8 +124,7 @@ res.header('Access-Control-Allow-Credentials', true);
       sameSite: 'None',
       path: '/' // Pastikan path sama dengan saat set cookie
     });
-res.header('Access-Control-Allow-Origin', 'https://kopi-ok.vercel.app');
-res.header('Access-Control-Allow-Credentials', true);
+
     res.sendStatus(200);
   } catch (error) {
     console.error('Logout error:', error);
