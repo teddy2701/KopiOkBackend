@@ -15,20 +15,27 @@ import path from 'path';
 dotenv.config();
 const app = express()
 const port = 4454
-const whitelist = ["http://localhost:4173", "http://localhost:5173", "https://kopi-ok.vercel.app/"];
+const whitelist = ["http://localhost:4173", "http://localhost:5173", "https://kopi-ok.vercel.app"];
 
 app.use(cookieParser())
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.use(
   cors({
-    origin: whitelist,
-    // methods: ["GET", "POST", "PUT"],
+    origin: function (origin, callback) {
+      if (whitelist.indexOf(origin) !== -1 || !origin) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
-    exposedHeaders: ['set-cookie']
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["set-cookie"]
   })
 );
-
+app.options("*", cors());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use("/user", UsersRouter)
