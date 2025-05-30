@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 const skemaPengembalian = new Schema({
     user:           { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    pengambilanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pengambilan', required: true },
+    pengambilanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pengambilan',  },
     penjualanFinalId: { type: mongoose.Schema.Types.ObjectId, ref: 'PenjualanFinal', required: true },
     directMaterials:[{
       material:    { type: mongoose.Schema.Types.ObjectId, ref: 'bahanBaku', required: true },

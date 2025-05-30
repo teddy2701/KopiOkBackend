@@ -19,7 +19,7 @@ export const getSales = async (req, res, next) => {
       .sort({ createdAt: -1 });
     res.json(sales);
   } catch (err) {
-    console.log(err)
+    console.log(err);
     next(err);
   }
 };
@@ -40,7 +40,7 @@ export const processReturns = async (req, res, next) => {
         throw new Error("Jumlah pengembalian tidak valid");
       }
       const product = await modelProduk.findById(productId).session(session);
-  
+
       if (!product) {
         throw new Error(`Product ${productId} Tidak ditemukan`);
       }
@@ -55,18 +55,16 @@ export const processReturns = async (req, res, next) => {
         .sort({ date: -1 })
         .session(session);
 
-    
-
       if (!lastOut) {
         throw new Error(
           `Tidak ditemukan pickup sebelumnya untuk ${product.name}`
         );
       }
 
-          // Gunakan moment-timezone untuk WIB
-    const nowWIB = moment().tz('Asia/Jakarta');
-    // const pickupDate = moment(lastOut.date).tz('Asia/Jakarta').startOf('day');
-    // const todayWIB = nowWIB.clone().startOf('day');
+      // Gunakan moment-timezone untuk WIB
+      const nowWIB = moment().tz("Asia/Jakarta");
+      // const pickupDate = moment(lastOut.date).tz('Asia/Jakarta').startOf('day');
+      // const todayWIB = nowWIB.clone().startOf('day');
       // if (!pickupDate.isSame(todayWIB)) {
       //   throw new Error(
       //     `Pengembalian hanya dapat dilakukan pada tanggal pickup: ${pickupDate}`
@@ -74,8 +72,8 @@ export const processReturns = async (req, res, next) => {
       // }
 
       // Cek existing return dengan rentang waktu WIB
-      const startOfDay = nowWIB.clone().startOf('day').toDate();
-      const endOfDay = nowWIB.clone().endOf('day').toDate();
+      const startOfDay = nowWIB.clone().startOf("day").toDate();
+      const endOfDay = nowWIB.clone().endOf("day").toDate();
 
       const existingReturn = await modelProdukHistory
         .findOne({
@@ -86,17 +84,18 @@ export const processReturns = async (req, res, next) => {
         })
         .session(session);
 
-        if (existingReturn) {
-          throw new Error(`Anda sudah melakukan pengembalian untuk ${product.name} hari ini`);
-        }
-        
+      if (existingReturn) {
+        throw new Error(
+          `Anda sudah melakukan pengembalian untuk ${product.name} hari ini`
+        );
+      }
 
       if (returnedQuantity > lastOut.amount) {
         throw new Error(
           `Jumlah retur (${returnedQuantity}) melebihi pickup (${lastOut.amount}) untuk ${product.name}`
         );
       }
-      
+
       const initialStock = product.stock;
       const soldQuantity = lastOut.amount - returnedQuantity;
       // OUT = penjualan
@@ -228,145 +227,129 @@ export const getSalesHistoryById = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const histories = await modelProdukHistory.find({
-      user: id,
-      changeType: { $in: ['OUT', 'IN'] }
-    })
-    .populate('product')
-    .lean();
-
-    const grouped = {};
- 
-
-    histories.forEach((item) => {
-      // Konversi tanggal ke WIB
-      const dateWIB = moment(item.date)
-        .tz('Asia/Jakarta')
-        .format('YYYY-MM-DD');
-      
-      const productName = item.product.name;
-      const harga = item.product.sellingPrice || 0;
-
-
-      if (!grouped[dateWIB]) grouped[dateWIB] = {};
-      if (!grouped[dateWIB][productName]) {
-        grouped[dateWIB][productName] = {
-          ambil: 0,
-          kembali: 0,
-          harga: harga
-        };
-      }
-
-      // Akumulasi jumlah
-      if (item.changeType === 'OUT') {
-        grouped[dateWIB][productName].ambil += item.amount;
-      } else if (item.changeType === 'IN') {
-        grouped[dateWIB][productName].kembali += item.amount;
-      }
-    });
-
+        // Validasi ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "ID User tidak valid" });
+        }
     
-    // Format output
-    const historyData = Object.entries(grouped).map(([date, products]) => ({
-      date,
-      products: Object.entries(products).map(([name, data]) => ({
-        name,
-        ambil: data.ambil,
-        kembali: data.kembali,
-        revenue: (data.ambil - data.kembali) * data.harga
-      }))
-    }))
+        // Hitung tanggal 30 hari yang lalu
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+    
+        // Query database
+        const penjualan = await modelPenjualanFinal
+          .find({
+            user: id,
+            completedAt: { $gte: startDate }
+          }).select("items completedAt").populate('items.product', 'name') // Populate data produk
+          .sort({ completedAt: -1 }) // Urutkan dari tanggal terbaru
+          .lean()
+          .exec();
 
-    // Urutkan berdasarkan tanggal
-    historyData.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    res.json(historyData);
+         
+    
+        if (!penjualan || penjualan.length === 0) {
+          return res.status(404).json({ 
+            message: "Tidak ditemukan data penjualan dalam 30 hari terakhir" 
+          });
+        }
+          res.status(200).json({
+            penjualan: penjualan.map(transaction => ({
+              ...transaction,
+              items: transaction.items.map(item => ({
+                ...item,
+                product: {
+              
+                  name: item.product?.name || "Produk Dihapus",
+                }
+              }))
+            }))
+          });
   } catch (error) {
-    console.error('Error getSalesHistory:', error);
-    res.status(500).json({ message: 'Internal server error' });
-    next()
+    console.error("Error getSalesHistory:", error);
+    res.status(500).json({ message: "Internal server error" });
+    next();
   }
 };
 
 export const getSalesHistory = async (req, res) => {
   try {
-    const users = await modelUser.find().select('_id nama');
+    const historyPenjualan = await modelPenjualanFinal.find()
+    .select("completedAt items")
+    .populate({
+      path: 'items.product',
+      select: 'typeProduk',
+      model: 'Produk'
+    })
+    .lean();
 
-    const results = [];
+  // Aggregasi data per tanggal
+  const aggregatedData = historyPenjualan.reduce((acc, transaction) => {
+    const tanggal = moment(transaction.completedAt)
+      .tz('Asia/Jakarta')
+      .format('DD/MM/YYYY');
+    
+    const existingEntry = acc.find(entry => entry.tanggal === tanggal);
 
-//     const nowWIB     = moment().tz('Asia/Jakarta');
-//  const startOfDay = nowWIB.clone().startOf('day').toDate();
-//  const endOfDay   = nowWIB.clone().endOf('day').toDate();
+    // Hitung per transaksi
+    let coffe = 0;
+    let nonCoffe = 0;
+    let totalCoffe = 0;
+    let totalNonCoffe = 0;
 
-  
-    for (const user of users) {
-      // ambil semua absen masuk (type 'IN') per user, sorted terbaru
-      const absenList = await modelAbsen
-        .find({ userId: user._id, type: 'IN' })
-        .sort({ timestamp: -1 })
-        .lean();
-        
-        const sales = [];
-        
-        for (const absen of absenList) {
-          // tanggal dasar
-        const dayStart = new Date(absen.timestamp);
-        dayStart.setHours(0,0,0,0);
-        const dayEnd = new Date(dayStart.getTime() + 24*60*60*1000);
-     
-        // ambil semua history OUT/IN untuk user+tanggal itu
-        const histories = await modelProdukHistory
-            .find({
-              user: user._id,
-              date: { $gte: dayStart, $lt: dayEnd },
-              changeType: { $in: ['OUT','IN'] }
-            })
-            .populate('product','name sellingPrice')
-            .lean();
-
-        // grup per produk
-        const prodMap = {};
-        histories.forEach(h => {
-          const key = h.product._id.toString();
-          if (!prodMap[key]) {
-            prodMap[key] = {
-              name: h.product.name,
-              ambil: 0,
-              kembali: 0,
-              harga: h.product.sellingPrice
-            };
-          }
-          if (h.changeType === 'OUT') prodMap[key].ambil += h.amount;
-          if (h.changeType === 'IN')  prodMap[key].kembali += h.amount;
-        });
-
-        // format products array
-        const products = Object.values(prodMap).map(p => ({
-          name: p.name,
-          ambil: p.ambil,
-          kembali: p.kembali,
-          revenue: (p.ambil - p.kembali) * p.harga
-        }));
-
-        sales.push({
-          date: dayStart.toISOString().split('T')[0],
-          absenMasuk: absen.timestamp.toTimeString().split(' ')[0].slice(0,5),
-          products
-        });
+    transaction.items.forEach(item => {
+      const productType = item.product?.typeProduk;
+      if(productType === 'coffe') {
+        coffe++;
+        totalCoffe += item.quantity;
+      } else if(productType === 'nonCoffe') {
+        nonCoffe++;
+        totalNonCoffe += item.quantity;
       }
+    });
 
-      results.push({
-        id: user._id.toString(),
-        name: user.nama,
-        sales
+    if(existingEntry) {
+      // Update existing entry
+      existingEntry.coffe += coffe;
+      existingEntry.nonCoffe += nonCoffe;
+      existingEntry.totalCoffe += totalCoffe;
+      existingEntry.totalNonCoffe += totalNonCoffe;
+    } else {
+      // Buat entry baru
+      acc.push({
+        tanggal,
+        coffe,
+        nonCoffe,
+        totalCoffe,
+        totalNonCoffe
       });
     }
 
-    res.json(results);
+    return acc;
+  }, []);
+
+  // Hitung total keseluruhan
+  const total = aggregatedData.reduce((sum, entry) => ({
+    totalCoffe: sum.totalCoffe + entry.totalCoffe,
+    totalNonCoffe: sum.totalNonCoffe + entry.totalNonCoffe
+  }), { totalCoffe: 0, totalNonCoffe: 0 });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      harian: aggregatedData,
+      total: {
+        totalCoffe: total.totalCoffe,
+        totalNonCoffe: total.totalNonCoffe,
+        grandTotal: total.totalCoffe + total.totalNonCoffe
+      }
+    }
+  });
+
   } catch (error) {
-    console.error('Error getSalesHistory:', error);
-    res.status(500).json({ message: 'Internal server error' });
-    next()
+    console.error("Error getSalesHistory:", error);
+    res.status(500).json({ message: "Internal server error" });
+    next();
   }
 };
 
@@ -377,14 +360,16 @@ export const createPengambilan = async (req, res, next) => {
   try {
     const {
       userId,
-      note = '',
+      note = "",
       uangPecah = 0,
       materials = [],
-      products = []
+      products = [],
     } = req.body;
 
     if (!materials.length && !products.length) {
-      return res.status(400).json({ message: 'Harap masukkan material atau produk' });
+      return res
+        .status(400)
+        .json({ message: "Harap masukkan material atau produk" });
     }
 
     // 1) Proses direct materials
@@ -401,8 +386,9 @@ export const createPengambilan = async (req, res, next) => {
     // 2) Proses products beserta bahan resep
     const productItems = [];
     for (const { productId, quantity } of products) {
-      const prod = await modelProduk.findById(productId)
-        .populate('recipe.material')
+      const prod = await modelProduk
+        .findById(productId)
+        .populate("recipe.material")
         .session(session);
       if (!prod) throw new Error(`Produk ${productId} tidak ditemukan`);
 
@@ -418,32 +404,36 @@ export const createPengambilan = async (req, res, next) => {
         ing.material.stock -= needed;
         await ing.material.save({ session });
         materialsUsed.push({
-          material:   ing.material._id,
+          material: ing.material._id,
           amountUsed: needed,
-          unit:       ing.material.unit
+          unit: ing.material.unit,
         });
       }
 
       productItems.push({
-        product:       productId,
+        product: productId,
         quantity,
-        materialsUsed
+        materialsUsed,
       });
     }
 
     // 3) Simpan Pengambilan
-    const [pengambilan] = await modelPengambilan.create([{
-      user:           userId,
-      note,
-      uangPecah,
-      directMaterials,
-      productItems,
-      status: 'active'
-    }], { session });
+    const [pengambilan] = await modelPengambilan.create(
+      [
+        {
+          user: userId,
+          note,
+          uangPecah,
+          directMaterials,
+          productItems,
+          status: "active",
+        },
+      ],
+      { session }
+    );
 
     await session.commitTransaction();
     res.status(201).json({ success: true, pengambilan });
-
   } catch (err) {
     await session.abortTransaction();
     next(err);
@@ -456,7 +446,12 @@ export const createPengembalian = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { userId, penjualanFinalId, materials = [], products = [] } = req.body;
+    const {
+      userId,
+      penjualanFinalId,
+      materials = [],
+      products = [],
+    } = req.body;
     // 1) Restore direct materials
     const directMaterials = [];
     for (let { materialId, quantity } of materials) {
@@ -468,7 +463,10 @@ export const createPengembalian = async (req, res, next) => {
     // 2) Restore via produk
     const productItems = [];
     for (let { productId, quantity } of products) {
-      let prod = await modelProduk.findById(productId).populate('recipe.material').session(session);
+      let prod = await modelProduk
+        .findById(productId)
+        .populate("recipe.material")
+        .session(session);
       const materialsRestored = [];
       for (let ing of prod.recipe) {
         let mat = ing.material;
@@ -476,20 +474,25 @@ export const createPengembalian = async (req, res, next) => {
         mat.stock += toRestore;
         await mat.save({ session });
         materialsRestored.push({
-          material:       mat._id,
+          material: mat._id,
           amountRestored: toRestore,
-          unit:           mat.unit
+          unit: mat.unit,
         });
       }
       productItems.push({ product: productId, quantity, materialsRestored });
     }
     // 3) Simpan
-    const [retur] = await modelPengembalian.create([{
-      user:           userId,
-      penjualanFinal: penjualanFinalId,
-      directMaterials,
-      productItems
-    }], { session });
+    const [retur] = await modelPengembalian.create(
+      [
+        {
+          user: userId,
+          penjualanFinal: penjualanFinalId,
+          directMaterials,
+          productItems,
+        },
+      ],
+      { session }
+    );
     await session.commitTransaction();
     res.status(201).json({ success: true, retur });
   } catch (err) {
@@ -498,17 +501,54 @@ export const createPengembalian = async (req, res, next) => {
   } finally {
     session.endSession();
   }
-}
+};
 
 export const getPenjualanTemp = async (req, res, next) => {
   try {
     const userId = req.params.id;
-    let temp = await modelPenjualanTemp.find({ user: userId }).populate('items.product');
-    if (!temp) {
-      return res.status(404).json({ message: 'Belum ada penjualan sementara' });
+    const docs = await modelPenjualanTemp
+      .find({ user: userId })
+      .populate("items.product", "name");
+
+    if (!docs) {
+      return res.status(404).json({ message: "Belum ada penjualan sementara" });
     }
-    res.json(temp);
+
+    // Map untuk mengakumulasi quantity per product
+    const map = new Map();
+    docs.forEach((doc) => {
+      doc.items.forEach((item) => {
+        const pid = item.product._id.toString();
+        if (!map.has(pid)) {
+          map.set(pid, {
+            product: {
+              _id: item.product._id,
+              name: item.product.name,
+            },
+            quantity: 0,
+          });
+        }
+        map.get(pid).quantity += item.quantity;
+      });
+    });
+
+    // Bentuk array items hasil akumulasi
+    const items = Array.from(map.values()).map((entry) => ({
+      _id: undefined, // jika butuh _id per item, bisa di-generate atau dibiarkan undefined
+      product: entry.product,
+      quantity: entry.quantity,
+    }));
+
+    // 2. Kumpulkan semua ID dokumen
+    const documentIds = docs.map(doc => doc._id);
+
+
+    res.json({
+      id: documentIds,
+      items,
+    });
   } catch (err) {
+    console.log(err)
     next(err);
   }
 };
@@ -516,64 +556,96 @@ export const getPenjualanTemp = async (req, res, next) => {
 export const getPengambilanID = async (req, res, next) => {
   try {
     const userId = req.params.id;
-    const temp = await modelPengambilan.find({ user: userId, status: "active" });
-  
+    const temp = await modelPengambilan.find({
+      user: userId,
+      status: "active",
+    });
+
     res.json(temp);
   } catch (err) {
     next(err);
   }
 };
 
-
-
-export const createPenjualanTemp  = async (req, res, next) => {
+export const createPenjualanTemp = async (req, res, next) => {
   try {
     const { userId, pengambilan, items } = req.body;
-    if (!pengambilan) return res.status(400).json({ message: 'Belum melakukan pengembalian barang' });
+    if (!pengambilan)
+      return res
+        .status(400)
+        .json({ message: "Belum melakukan pengembalian barang" });
 
-    const populated = await Promise.all(items.map(async i => {
-      const prod = await modelProduk.findById(i.productId);
-      if (!prod) throw new Error(`Produk ${i.productId} tidak ditemukan`);
-      return { product: prod._id, quantity: i.quantity };
-    }));
-
+    const populated = await Promise.all(
+      items.map(async (i) => {
+        const prod = await modelProduk.findById(i.productId);
+        if (!prod) throw new Error(`Produk ${i.productId} tidak ditemukan`);
+        return { product: prod._id, quantity: i.quantity };
+      })
+    );
+ 
     const temp = await modelPenjualanTemp.create({
-      user:        userId,
+      user: userId,
       pengambilan: pengambilan,
-      items:       populated
+      items: populated,
     });
 
     res.status(201).json(temp);
   } catch (err) {
     next(err);
   }
-}
+};
 
 export const savePenjualanTemp = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { items } = req.body;
     const tempId = req.params.id;
 
-    // Map item payload
-    const populatedItems = await Promise.all(items.map(async item => {
-      const prod = await modelProduk.findById(item.productId);
-      if (!prod) throw new Error(`Produk ${item.productId} tidak ditemukan`);
-      return { product: prod._id, quantity: item.quantity };
-    }));
+     // Cari by ID, bukan by user
+     const temp = await modelPenjualanTemp.findById(tempId).select({
+      _id: 0,
+      user: 1,
+      pengambilan: 1,
+    }).session(session);
 
-    // Cari by ID, bukan by user
-    const temp = await modelPenjualanTemp.findById(tempId);
     if (!temp) {
-      return res.status(404).json({ message: `PenjualanTemp ${tempId} tidak ditemukan` });
+      return res
+        .status(404)
+        .json({ message: `Penjualan tidak ditemukan` });
     }
 
-    temp.items = populatedItems;
-    temp.updatedAt = Date.now();
-    await temp.save();
+    // Map item payload
+    const populatedItems = await Promise.all(
+      items.map(async (item) => {
+        const prod = await modelProduk.findById(item.productId).session(session);;
+        if (!prod) throw new Error(`Produk tidak ditemukan`);
+        return { product: prod._id, quantity: item.quantity };
+      })
+    );
 
-    res.status(200).json(temp);
+    //hapus document lama dengan user dan pengambilan yang sama
+      await modelPenjualanTemp.deleteMany({
+        user: temp.user,
+        pengambilan: temp.pengambilan
+      }).session(session);
+  
+
+    // Buat dokumen baru dengan field yang diperlukan
+    await modelPenjualanTemp.create({
+      user: temp.user,
+      pengambilan: temp.pengambilan,
+      items: populatedItems,
+    });
+
+    await session.commitTransaction();
+
+    res.status(200).json({messege: "Data Penjualan berhasil di ubah"});
   } catch (err) {
+    await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -583,66 +655,88 @@ export const finalizePenjualan = async (req, res, next) => {
   try {
     const { userId, tempIds, pengeluaran, note } = req.body;
 
-    if(pengeluaran && note=="") {
-      return res.status(400).json({ message: 'Catatan pengeluaran tidak boleh kosong' });
+ 
+    if (pengeluaran && note == "") {
+      return res
+        .status(400)
+        .json({ message: "Catatan pengeluaran tidak boleh kosong" });
     }
 
     if (!Array.isArray(tempIds) || !tempIds.length) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(400).json({ message: 'tempIds is required' });
+      return res.status(400).json({ message: "tempIds is required" });
     }
 
     // Ambil semua temp sales
     const temps = await modelPenjualanTemp
       .find({ _id: { $in: tempIds }, user: userId })
-      .populate('items.product')
+      .populate("items.product")
       .session(session);
+
+     
     if (!temps.length) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(404).json({ message: 'Tidak ada penjualan sementara ditemukan' });
+      return res
+        .status(404)
+        .json({ message: "Tidak ada penjualan sementara ditemukan" });
     }
 
     // Agregasi jumlah per produk
     const aggMap = {}; // productId -> { quantity, price }
-    temps.forEach(t => {
-      t.items.forEach(it => {
+    temps.forEach((t) => {
+      t.items.forEach((it) => {
         const pid = it.product._id.toString();
         if (!aggMap[pid]) {
-          aggMap[pid] = { product: it.product._id, quantity: 0, price: it.product.sellingPrice };
+          aggMap[pid] = {
+            product: it.product._id,
+            quantity: 0,
+            price: it.product.sellingPrice,
+          };
         }
         aggMap[pid].quantity += it.quantity;
       });
     });
     const items = Object.values(aggMap);
     const total = items.reduce((sum, it) => sum + it.quantity * it.price, 0);
-    
+    const idPengambilan = [...new Set(
+      temps.flatMap(t => t.pengambilan.map(id => id.toString()))
+    )];
+    console.log("Id Pengambilan: ",idPengambilan);
+
     // Buat satu dokumen PenjualanFinal
-    const [finalDoc] = await modelPenjualanFinal.create([{
-      user:     userId,
-      pengambilanId: temps[0].pengambilan, 
-      pengeluaran: pengeluaran || 0,
-      notePengeluaran: pengeluaran ? note : ' ',
-      items,
-      total,
-      completedAt: new Date()
-    }], { session });
+    const [finalDoc] = await modelPenjualanFinal.create(
+      [
+        {
+          user: userId,
+          pengambilanId: idPengambilan,
+          pengeluaran: pengeluaran || 0,
+          notePengeluaran: pengeluaran ? note : " ",
+          items,
+          total,
+          completedAt: new Date(),
+        },
+      ],
+      { session }
+    );
 
     // Hapus semua temp sales yang digabung
-    await modelPenjualanTemp.deleteMany({ _id: { $in: tempIds } }).session(session);
+    await modelPenjualanTemp
+      .deleteMany({ _id: { $in: tempIds }, user: userId  })
+      .session(session); 
 
     await session.commitTransaction();
     session.endSession();
 
-    console.log(finalDoc)
     return res.status(200).json({
-      message: 'Batch penjualan selesai',
-      final: finalDoc
+      message: "Batch penjualan selesai",
+      final: finalDoc,
     });
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
+    console.log(err)
     return next(err);
   }
 };
@@ -651,69 +745,76 @@ export const getFinalSale = async (req, res, next) => {
   try {
     const userId = req.params.id;
 
-    // 1) Ambil semua Pengambilan milik user dengan status 'jualan'
+    // 1) Ambil semua Pengambilan milik user dengan status 'active'
     const pengambilans = await modelPengambilan
-      .find({ user: userId, status: 'active' })
+      .find({ user: userId, status: "active" })
       .lean();
 
-      
-      const idPenjualanFinal = await modelPenjualanFinal.findOne({ pengambilanId: pengambilans[0]._id, user: userId }).lean();
-      const options = [];
-      
-    for (const p of pengambilans) {
-      // a) Direct materials list
-      const materials = [];
-      if (Array.isArray(p.directMaterials)) {
-        // fetch material names
-        const matIds = p.directMaterials.map(dm => dm.material);
-        const matDocs = await modelBahanBaku.find({ _id: { $in: matIds } }).lean();
-        const matMap = matDocs.reduce((m, doc) => {
-          m[doc._id.toString()] = doc;
-          return m;
-        }, {});
-        for (const dm of p.directMaterials) {
-          const doc = matMap[dm.material.toString()];
-          materials.push({
-            materialId: dm.material,
-            name:       doc?.name || '',
-            unit:       doc?.unit || '',
-            quantity:   dm.quantity
-          });
-        }
-      }
-
-      // b) Products list
-      const products = [];
-      if (Array.isArray(p.productItems)) {
-        // fetch product names
-        const prodIds = p.productItems.map(pi => pi.product);
-        const prodDocs = await modelProduk.find({ _id: { $in: prodIds } }).lean();
-        const prodMap = prodDocs.reduce((m, doc) => {
-          m[doc._id.toString()] = doc;
-          return m;
-        }, {});
-        for (const pi of p.productItems) {
-          const doc = prodMap[pi.product.toString()];
-          products.push({
-            productId: pi.product,
-            name:      doc?.name || '',
-            quantity:  pi.quantity
-          });
-        }
-      }
-
-      options.push({
-        pengambilanId: p._id,
-        penjualanFinalID: idPenjualanFinal._id,
-        uangPecah:     p.uangPecah,
-        materials,
-        products
-      });
+    if (!pengambilans.length) {
+      return res.status(404).json({ message: "Tidak ada pengambilan bahan baku" });
     }
 
-    return res.json({ options });
+    // 2) Cek penjualan final (disesuaikan dengan bisnis logic yang benar)
+    const idPenjualanFinal = await modelPenjualanFinal
+      .findOne({ user: userId })
+      .sort({ _id: -1 })
+      .lean();
+
+  
+
+    if (!idPenjualanFinal) {
+      return res.status(404).json({ message: "Tidak ada penjualan ditemukan" });
+    }
+
+    // 3) Kumpulkan semua ID material dan produk unik
+    const allMaterialIds = [...new Set(
+      pengambilans.flatMap(p => 
+        p.directMaterials?.map(dm => dm.material.toString()) || []
+      )
+    )];
+
+    const allProductIds = [...new Set(
+      pengambilans.flatMap(p => 
+        p.productItems?.map(pi => pi.product.toString()) || []
+      )
+    )];
+
+    // 4) Query semua material dan produk sekaligus
+    const [materialsData, productsData] = await Promise.all([
+      modelBahanBaku.find({ _id: { $in: allMaterialIds } }).lean(),
+      modelProduk.find({ _id: { $in: allProductIds }, dibuat: true }).lean()
+    ]);
+
+    // 5) Buat mapping untuk data
+    const materialMap = materialsData.reduce((acc, cur) => {
+      acc[cur._id.toString()] = { 
+        materialId: cur._id, 
+        name: cur.name, 
+        unit: cur.unit 
+      };
+      return acc;
+    }, {});
+
+    const productMap = productsData.reduce((acc, cur) => {
+      acc[cur._id.toString()] = { 
+        productId: cur._id, 
+        name: cur.name 
+      };
+      return acc;
+    }, {});
+
+    // 6) Kumpulkan hasil akhir
+    const result = {
+      materials: Object.values(materialMap),
+      products: Object.values(productMap),
+      penjualanFinalID: idPenjualanFinal._id
+    };
+
+  
+    return res.json(result);
 
   } catch (err) {
+    console.log(err);
     next(err);
   }
 };
@@ -722,87 +823,217 @@ export const createReturn = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { userId, penjualanFinalId,  pengambilanId, note = '', materials = [], products = []} = req.body;
-    if (!userId || !pengambilanId) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ message: 'userId dan pengambilanId wajib diisi' });
-    }
+    const {
+      userId,
+      penjualanFinalId,
+      note = "",
+      materials = [],
+      products = [],
+    } = req.body;
 
-    // 1) Proses pengembalian bahan baku
-    const directMaterials = [];
-    for (const { materialId, quantity } of materials) {
-      const mat = await modelBahanBaku.findById(materialId).session(session);
-      if (!mat) throw new Error(`Material ${materialId} tidak ditemukan`);
-      mat.stock += quantity;
-      await mat.save({ session });
-      directMaterials.push({ material: materialId, quantity });
-    }
+      // Validasi input dasar
+      if (!userId || !penjualanFinalId) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ 
+          message: "UserId dan penjualanFinalId wajib diisi" 
+        });
+      }
+  
+      // 1. Validasi struktur data input
+      const validateItemStructure = (items, type) => {
+        if (!Array.isArray(items)) {
+          throw new Error(`Format ${type} tidak valid`);
+        }
+        
+        items.forEach((item, index) => {
+          const idField = `${type}Id`;
+          if (!item?.[idField] || typeof item.quantity !== 'number') {
+            throw new Error(
+              `Item ${type} ke-${index + 1} tidak valid: ` +
+              `Field ${idField} dan quantity wajib diisi`
+            );
+          }
+        });
+      };
+  
+      validateItemStructure(materials, 'material');
+      validateItemStructure(products, 'product');
+  
+      // 2. Ambil semua pengambilan aktif user
+      const pengambilans = await modelPengambilan.find({ 
+        user: userId, 
+        status: 'active' 
+      }).session(session).lean();
+     
+      if (pengambilans.length === 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ 
+          message: "Tidak ada pengambilan aktif ditemukan" 
+        });
+      }
+  
+      // 3. Hitung total pengambilan material dan produk
+      const totalTaken = { materials: {}, products: {} };
+      for (const p of pengambilans) {
+        // Material langsung
+        p.directMaterials?.forEach(dm => {
+          const key = dm.material?.toString?.();
+          if (key && dm.quantity) {
+            totalTaken.materials[key] = (totalTaken.materials[key] || 0) + dm.quantity;
+          }
+        });
+        
+        // Produk
+        p.productItems?.forEach(pi => {
+          const key = pi.product?.toString?.();
+          if (key && pi.quantity) {
+            totalTaken.products[key] = (totalTaken.products[key] || 0) + pi.quantity;
+          }
+        });
+      }
+  
+    // [BARU] 5. Ambil nama material dan produk
+    const materialIds = materials.map(m => m.materialId);
+    const productIds = products.map(p => p.productId);
 
-    // 2) Proses pengembalian produk
-    const productItems = [];
-    for (const { productId, quantity } of products) {
-      const prod = await modelProduk.findById(productId).session(session);
-      if (!prod) throw new Error(`Produk ${productId} tidak ditemukan`);
-      prod.stock = (prod.stock || 0) + quantity;
-      await prod.save({ session });
-      productItems.push({ product: productId, quantity });
-    }
-   
-    // // 3) Simpan dokumen Pengembalian
-    // const [retur] = await modelPengembalian.create([{
-    //   user:            userId,
-    //   pengambilanId:     pengambilanId,
-    //   penjualanFinalId: penjualanFinalId,
-    //   note,
-    //   directMaterials,   // [{ material, quantity }]
-    //   productItems       // [{ product, quantity }]
-    // }], { session });
+    const [materialsData, productsData] = await Promise.all([
+      modelBahanBaku.find({ _id: { $in: materialIds } }, 'name').session(session).lean(),
+      modelProduk.find({ _id: { $in: productIds } }, 'name').session(session).lean()
+    ]);
 
-     const retur = [{
-      user:            userId,
-      pengambilanId:     pengambilanId,
-      penjualanFinalId: penjualanFinalId,
+    const materialNames = materialsData.reduce((acc, cur) => {
+      acc[cur._id.toString()] = cur.name;
+      return acc;
+    }, {});
+
+    const productNames = productsData.reduce((acc, cur) => {
+      acc[cur._id.toString()] = cur.name;
+      return acc;
+    }, {});
+
+    // 6. Validasi jumlah maksimal dengan nama
+    const validateQty = (type, items, namesMap) => {
+      items.forEach((item) => {
+        const id = item[`${type}Id`]?.toString();
+        if (!id) throw new Error(`ID ${type} tidak valid`);
+
+        const taken = totalTaken[type + 's']?.[id] || 0;
+        // const returned = totalReturned[type + 's']?.[id] || 0;
+        // const remaining = taken - returned;
+        // console.log("taken: ", taken)
+        // console.log("returned: ", returned)
+
+        if (item.quantity > taken) {
+          const itemName = namesMap[id] || `[Nama tidak ditemukan]`;
+          throw new Error(
+            `Jumlah pengembalian "${itemName}" melebihi yang diambil. ` +
+            `Maksimal yang bisa dikembalikan: ${taken}`
+          );
+        }
+      });
+    };
+
+    validateQty('material', materials, materialNames); // [BARU] passing namesMap
+    validateQty('product', products, productNames);     // [BARU] passing namesMap
+  
+      // 6. Proses pengembalian stok
+      const updateStock = async (model, items, type) => {
+        for (const item of items) {
+          const id = item[`${type}Id`]?.toString();
+          if (!id) continue;
+  
+          const doc = await model.findById(id).session(session);
+          if (!doc) throw new Error(`${type} ${id} tidak ditemukan`);
+          
+          doc.stock += item.quantity;
+          await doc.save({ session });
+        }
+      };
+
+    await updateStock(modelBahanBaku, materials);
+    await updateStock(modelProduk, products);
+
+    // 6. Simpan data pengembalian
+    const [retur] = await modelPengembalian.create([{
+      user: userId,
+      penjualanFinalId,
       note,
-      directMaterials,   // [{ material, quantity }]
-      productItems       // [{ product, quantity }]
-    }]
-    
-    console.log(retur)
-    // // 4) Tandai Pengambilan sudah diretur
-    // await modelPengambilan
-    //   .findByIdAndUpdate(pengambilanId,
-    //     { status: 'completed' },
-    //     { session }
-    //   );
+      directMaterials: materials.map(m => ({
+        material: m.materialId,
+        quantity: m.quantity
+      })),
+      productItems: products.map(p => ({
+        product: p.productId,
+        quantity: p.quantity
+      }))
+    }], { session });
+
+    // [BARU] 8. Update status semua pengambilan aktif menjadi completed
+    await modelPengambilan.updateMany(
+      { _id: { $in: pengambilans.map(p => p._id) } },
+      { $set: { status: 'completed' } },
+      { session }
+    );
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(201).json({ message: 'Pengembalian berhasil', retur });
+    return res.status(201).json({ 
+      message: "Pengembalian berhasil",
+      retur 
+    });
+
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    return next(err);
+    console.log(err)
+    return res.status(400).json({
+      message: err.message.includes('melebihi') 
+        ? err.message 
+        : 'Gagal memproses pengembalian'
+    });
   }
 };
-
 
 export const getLaporanHarian = async (req, res) => {
   try {
     const id = req.params.id;
     if (!id) {
-      return res.status(400).json({ message: 'Permintaan Ditolak' });
+      return res.status(400).json({ message: "Permintaan Ditolak" });
     }
 
     const transaksi = await modelPenjualanFinal
       .findById(id)
-      .populate('items.product', 'name sellingPrice');
+      .populate("items.product", "name sellingPrice typeProduk");
 
     if (!transaksi) {
-      return res.status(404).json({ message: 'Tidak ada transaksi' });
+      return res.status(404).json({ message: "Tidak ada transaksi" });
     }
 
+    let ambilUang = 0;
+
+    for(const pengambilan of transaksi.pengambilanId){
+      // 1. Ambil data pengambilan
+    const pengambilanUang = await modelPengambilan
+    .findById(pengambilan)
+    .select("uangPecah")
+    .lean();
+
+     // 2. Cek jika dokumen atau uangPecah tidak ada/null
+     if (!pengambilanUang?.uangPecah) {
+      continue; // Lewati iterasi ini
+    }
+    // 3. Pastikan uangPecah adalah angka
+    const uangPecahNumber = Number(pengambilanUang.uangPecah);
+    
+    if (!isNaN(uangPecahNumber)) {
+      ambilUang += uangPecahNumber;
+     
+    } 
+    }
+      
     // Agregasi per produk
     const produkMap = new Map();
     let totalPendapatan = 0;
@@ -812,26 +1043,28 @@ export const getLaporanHarian = async (req, res) => {
     if (totalPengeluaran > 0) {
       catatanPengeluaran.push({
         jumlah: totalPengeluaran,
-        catatan: transaksi.notePengeluaran || ''
+        catatan: transaksi.notePengeluaran || "",
       });
     }
 
     for (const item of transaksi.items) {
+      console.log("data item:",item)
       const pid = item.product._id.toString();
       const harga = Number(item.product.sellingPrice) || 0;
-      const qty   = Number(item.quantity) || 0;
+      const qty = Number(item.quantity) || 0;
       const totalItem = harga * qty;
 
       if (produkMap.has(pid)) {
         const e = produkMap.get(pid);
         e.jumlah += qty;
-        e.total  += totalItem;
+        e.total += totalItem;
       } else {
         produkMap.set(pid, {
-          nama:   item.product.name,
+          nama: item.product.name,
           harga,
           jumlah: qty,
-          total:  totalItem
+          type: item.product.typeProduk || "coffe",
+          total: totalItem,
         });
       }
 
@@ -839,29 +1072,218 @@ export const getLaporanHarian = async (req, res) => {
     }
 
     // Format respons
-    const produk = Array.from(produkMap.values()).map(p => ({
-      nama:          p.nama,
-      jumlah:        p.jumlah,
-      harga:         p.harga,
-      total:         p.total,
-      displayHarga:  `Rp ${p.harga.toLocaleString('id-ID')}`,
-      displayTotal:  `Rp ${p.total.toLocaleString('id-ID')}`
+    const produk = Array.from(produkMap.values()).map((p) => ({
+      nama: p.nama,
+      jumlah: p.jumlah,
+      harga: p.harga,
+      total: p.total,
+      type: p.type,
+      displayHarga: `Rp ${p.harga.toLocaleString("id-ID")}`,
+      displayTotal: `Rp ${p.total.toLocaleString("id-ID")}`,
     }));
 
     const ringkasan = {
-      numericPendapatan:  totalPendapatan,
+      numericPendapatan: totalPendapatan,
       numericPengeluaran: totalPengeluaran,
-      displayPendapatan:  `Rp ${totalPendapatan.toLocaleString('id-ID')}`,
-      displayPengeluaran: `Rp ${totalPengeluaran.toLocaleString('id-ID')}`,
-      catatanPengeluaran
+      displayPendapatan: `Rp ${totalPendapatan.toLocaleString("id-ID")}`,
+      displayPengeluaran: `Rp ${totalPengeluaran.toLocaleString("id-ID")}`,
+      catatanPengeluaran,
+      uangPecah: ambilUang,
     };
 
     return res.json({ produk, ringkasan });
   } catch (err) {
-    console.error('Error getLaporanHarian:', err);
+    console.error("Error getLaporanHarian:", err);
     return res.status(500).json({
-      message: 'Terjadi kesalahan server',
-      error: err.message
+      message: "Terjadi kesalahan server",
+      error: err.message,
+    });
+  }
+};
+
+
+export const getTotalPendapatan = async (req, res) => {
+  try {
+    // Hitung tanggal default (2 bulan terakhir)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - 2);
+
+    // Ambil tanggal dari query jika ada
+    const filterStartDate = req.query.startDate 
+      ? new Date(req.query.startDate) 
+      : startDate;
+    
+    const filterEndDate = req.query.endDate 
+      ? new Date(req.query.endDate) 
+      : endDate;
+
+      console.log("hari mulai: ", filterStartDate)
+      console.log ("hari akhir: ", filterEndDate)
+    // Pipeline agregasi
+    const pipeline = [
+      {
+        $match: {
+          completedAt: {
+            $gte: filterStartDate,
+            $lte: filterEndDate
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userData"
+        }
+      },
+      { $unwind: "$userData" },
+      {
+        $project: {
+          date: {
+            $dateToString: { format: "%d-%m-%Y", date: "$completedAt" }
+          },
+          username: "$userData.username",
+          total: { $subtract: ["$total", "$pengeluaran"] }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            date: "$date",
+            username: "$username"
+          },
+          userTotal: { $sum: "$total" }
+        }
+      },
+      {
+        $group: {
+          _id: "$_id.date",
+          users: {
+            $push: {
+              username: "$_id.username",
+              total: "$userTotal"
+            }
+          },
+          total: { $sum: "$userTotal" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ];
+
+    const aggregationResult = await modelPenjualanFinal.aggregate(pipeline);
+
+    
+    // Transformasi hasil agregasi
+    const formattedResult = aggregationResult.map(dateGroup => ({
+      date: dateGroup._id,
+      total: dateGroup.total,
+      users: dateGroup.users.map(user => ({
+        username: user.username,
+        total: user.total
+      }))
+    }));
+
+    // Hitung total keseluruhan
+    const totalKeseluruhan = formattedResult.reduce(
+      (sum, item) => sum + item.total, 
+      0
+    );
+
+    res.status(200).json({
+      data: formattedResult,
+      totalKeseluruhan
+    });
+  } catch (error) {
+    console.error("Error getTotalPendapatan:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getSalesReport = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    // 1. Hitung rentang tanggal default (2 bulan terakhir)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - 2);
+
+    // Ambil tanggal dari query jika ada
+    const filterStartDate = req.query.startDate 
+      ? new Date(req.query.startDate) 
+      : startDate;
+    
+    const filterEndDate = req.query.endDate 
+      ? new Date(req.query.endDate) 
+      : endDate;
+
+    // 4. Query database untuk penjualan dalam rentang waktu
+    const penjualanList = await modelPenjualanFinal.find({
+      user: userId,
+      completedAt: { $gte: filterStartDate, $lte: filterEndDate }
+    }).populate({
+      path: 'items.product',
+      select: 'typeProduk'
+    });
+
+    // 5. Inisialisasi struktur data
+    const salesByDay = {};
+    let totalCoffee = 0;
+    let totalNonCoffee = 0;
+    let totalRevenue = 0;
+
+    // 6. Proses setiap transaksi penjualan
+    for (const penjualan of penjualanList) {
+      const dateKey = penjualan.completedAt.toISOString().split('T')[0];
+      
+      if (!salesByDay[dateKey]) {
+        salesByDay[dateKey] = {
+          date: dateKey,
+          coffeeSales: 0,
+          nonCoffeeSales: 0,
+          revenue: 0
+        };
+      }
+
+      // Tambahkan revenue transaksi
+      salesByDay[dateKey].revenue += penjualan.total;
+      totalRevenue += penjualan.total;
+
+      // Proses setiap item dalam transaksi
+      for (const item of penjualan.items) {
+        if (item.product && item.product.typeProduk === 'nonCoffe') {
+          salesByDay[dateKey].coffeeSales += item.quantity;
+          totalNonCoffee += item.quantity;
+        } else {
+          salesByDay[dateKey].nonCoffeeSales += item.quantity;
+          totalCoffee += item.quantity;
+        }
+      }
+    }
+
+    // 7. Konversi ke array dan urutkan berdasarkan tanggal
+    const dailySales = Object.values(salesByDay).sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
+
+    // 8. Format response
+    res.status(200).json({
+      success: true,
+      data: {
+        dailySales,
+        totals: {
+          totalCoffee,
+          totalNonCoffee,
+          totalRevenue
+        }
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 };

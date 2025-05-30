@@ -28,9 +28,8 @@ export const login = async (req, res) => {
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: true,
+        // secure: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: "None"
       });
      
 
@@ -76,13 +75,13 @@ export const me = async (req, res, next) => {
           };
   
           const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: "15m",
+            expiresIn: "20s",
           });
           
           res.json({ accessToken  });
         }
       );
-   
+    
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Terjadi sesuatu pada server" });

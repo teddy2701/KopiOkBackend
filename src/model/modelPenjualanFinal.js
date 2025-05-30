@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 const skemaPenjualanFinal = new Schema({
     user:           { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    pengambilanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pengambilan', required: true },
+    pengambilanId:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'Pengambilan', required: true }],
     items:         [{
       product:      { type: mongoose.Schema.Types.ObjectId, ref: 'Produk', required: true },
       quantity:     { type: Number, required: true },

@@ -1,12 +1,12 @@
 import modelUser from "../model/modelUser.js";
 import dotenv from "dotenv";
 import path from "path";
-import { fileURLToPath } from "url";
+
 
 dotenv.config();
 
 export const createUser = async (req, res) => {
-  const { username, password, nama, noTelp, role } = req.body;
+  const { username, password, nama, noTelp, role, areaPenjualan } = req.body;
 
   try {
     // Check if the user already exists
@@ -50,6 +50,7 @@ export const createUser = async (req, res) => {
     const user = await modelUser.create({
       username,
       password,
+      areaPenjualan,
       nama,
       noTelp,
       fotoWajah: fotoWajahMeta,
@@ -148,3 +149,14 @@ export const deleteUser = async (req, res) => {
     res.status(409).json({ message: error.message });
   }
 };
+
+export const userArea = async (req, res) => {
+  try {
+    const areaPenjualan = await modelUser.find({role: 'user'}).select("nama areaPenjualan");
+ 
+    res.status(200).json(areaPenjualan);
+  } catch (error) {
+    console.error("Error fetching area penjualan:", error);
+    res.status(500).json({ message: "Gagal mengambil data area penjualan" });
+  }
+}

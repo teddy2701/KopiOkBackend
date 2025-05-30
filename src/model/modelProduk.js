@@ -3,6 +3,9 @@ const Schema = mongoose.Schema;
 
 const productSchema = new Schema({
   name: { type: String, required: true, unique: true },
+  typeProduk: { type: String, required: true }, // coffe or nonCoffe
+  stock: { type: Number, default: 0 }, // jumlah produk yang sudah di produksi
+  dibuat: {type: Boolean, enum: [false, true], default: false}, // manual or otomatis
   recipe: [
     {
       material: {

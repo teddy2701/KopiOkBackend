@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { type } from "os";
 const Schema = mongoose.Schema;
 
 const skemaUser = new Schema({
@@ -15,6 +16,8 @@ const skemaUser = new Schema({
     required: [true, "Password is required"],
     select: false, // Jangan pernah kembalikan password dalam query
   },
+
+  areaPenjualan:{ type: String, required: [true, "Area Penjualan is required"], trim: true },
 
   nama: {
     type: String,

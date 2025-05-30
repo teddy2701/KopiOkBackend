@@ -1,4 +1,4 @@
-GET http://localhost:4454/sale/get/final/6826bcdd7b4a1814bcde807f HTTP/1.1
+GET http://localhost:4454/sale/laporan-pendapatan/683692fdac55f75cdc20794d?startDate=2025-03-29&endDate=2025-05-29 HTTP/1.1
 
 ###
 
